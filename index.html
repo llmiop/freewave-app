@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeWave Music</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            color: white;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .search-box {
+            margin-bottom: 20px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--tg-theme-hint-color, #ddd);
+            border-radius: 12px;
+            font-size: 16px;
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            color: var(--tg-theme-text-color, #000);
+        }
+        .track {
+            padding: 16px;
+            margin-bottom: 12px;
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .track:hover {
+            transform: translateX(5px);
+            background: var(--tg-theme-hint-color, #e9ecef);
+        }
+        .track-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        .track-artist {
+            font-size: 13px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+        .player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            padding: 20px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+        .player.active {
+            transform: translateY(0);
+        }
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--tg-theme-text-color, #fff);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        audio {
+            width: 100%;
+            border-radius: 10px;
+        }
+        .status {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎵 FreeWave Music</h1>
+        <p>Слушай музыку без цензуры</p>
+    </div>
+    
+    <div class="search-box">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍 Поиск треков...">
+    </div>
+    
+    <div id="trackList"></div>
+    
+    <div class="player" id="player">
+        <div class="player-header">
+            <span id="playerTitle">Выберите трек</span>
+            <button class="close-btn" onclick="closePlayer()">✕</button>
+        </div>
+        <audio id="audioPlayer" controls></audio>
+    </div>
+
+    <script>
+        // Инициализация Telegram
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+        
+        // Треки
+        const tracks = [
+            { id: 1, title: "Blinding Lights", artist: "The Weeknd", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+            { id: 2, title: "Shape of You", artist: "Ed Sheeran", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+            { id: 3, title: "Bohemian Rhapsody", artist: "Queen", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+            { id: 4, title: "Dance Monkey", artist: "Tones and I", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+            { id: 5, title: "Believer", artist: "Imagine Dragons", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+            { id: 6, title: "Sunflower", artist: "Post Malone", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+            { id: 7, title: "Bad Guy", artist: "Billie Eilish", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+            { id: 8, title: "God's Plan", artist: "Drake", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
+        ];
+        
+        function renderTracks(filteredTracks = null) {
+            const container = document.getElementById('trackList');
+            const tracksToShow = filteredTracks || tracks;
+            
+            if (tracksToShow.length === 0) {
+                container.innerHTML = '<div class="status">😕 Ничего не найдено</div>';
+                return;
+            }
+            
+            container.innerHTML = tracksToShow.map(track => `
+                <div class="track" onclick="playTrack(${track.id})">
+                    <div class="track-title">${escapeHtml(track.title)}</div>
+                    <div class="track-artist">${escapeHtml(track.artist)}</div>
+                </div>
+            `).join('');
+        }
+        
+        function searchTracks() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            if (!query) {
+                renderTracks();
+                return;
+            }
+            const filtered = tracks.filter(track => 
+                track.title.toLowerCase().includes(query) || 
+                track.artist.toLowerCase().includes(query)
+            );
+            renderTracks(filtered);
+        }
+        
+        function playTrack(id) {
+            const track = tracks.find(t => t.id === id);
+            if (!track) return;
+            
+            const player = document.getElementById('player');
+            const audio = document.getElementById('audioPlayer');
+            const title = document.getElementById('playerTitle');
+            
+            title.textContent = `${track.title} - ${track.artist}`;
+            audio.src = track.url;
+            audio.play();
+            player.classList.add('active');
+            
+            // Отправляем в Telegram
+            tg.sendData(JSON.stringify({ action: 'play', track: track.title }));
+        }
+        
+        function closePlayer() {
+            const player = document.getElementById('player');
+            const audio = document.getElementById('audioPlayer');
+            audio.pause();
+            player.classList.remove('active');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', searchTracks);
+        
+        // Запуск
+        renderTracks();
+        
+        // Кнопка в Telegram
+        tg.MainButton.setText("🎵 FreeWave");
+        tg.MainButton.show();
+        tg.MainButton.onClick(() => {
+            tg.showAlert("Выберите трек для прослушивания!");
+        });
+    </script>
+</body>
+</html>
